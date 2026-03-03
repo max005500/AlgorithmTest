@@ -25,7 +25,7 @@ def Kolmogorov_PSD(f: np.ndarray, wavelength: float, glob: bool, r0Cn2=1.0):
     if glob:
         # kolmogorov PSD Integrated r0 
         # r0 = cn2_to_r0(r0,lamda=wavelength)
-        Phi_K[mask_f] = 0.023 *(r0Cn2 ** (-5/3)) * (f[mask_f] ** (-11/3)) 
+        Phi_K = 0.023 *(r0Cn2 ** (-5/3)) * (f[mask_f] ** (-11/3)) 
        
     else:
         Cn2_dh = r0Cn2           # asumes a layer with cn2 = 1

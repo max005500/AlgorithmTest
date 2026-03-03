@@ -1,5 +1,5 @@
 import numpy as np
-import common as cm
+import KolmogorovPSD as cm
 
 def calculate_Zx_spectral_filter(fx: np.ndarray, fy: np.ndarray, wavelength: float, d: float):
     """
@@ -14,7 +14,7 @@ def calculate_Zx_spectral_filter(fx: np.ndarray, fy: np.ndarray, wavelength: flo
 
         Zx(F) (ndarray): spatial filter.
     """
-    scalingFactor =((np.sqrt(3) * wavelength) / (np.pi * d)) ** 2
+    scalingFactor =((np.sqrt(3) * wavelength) / (np.pi*d)) ** 2
     y_term = 3 * (np.sinc(d * fy)) ** 2
 
     # [u*cos(u) - sin(u)]^2 / u^4, where u = pi*d*fx
@@ -32,10 +32,9 @@ def calculate_Zx_spectral_filter(fx: np.ndarray, fy: np.ndarray, wavelength: flo
     # [u cos(u) - sin(u)]^2 / u^4
     x_term[mask] = numerator / u4[mask]
     
-    Zx =  y_term * x_term * scalingFactor 
+    Zx =  y_term * x_term * scalingFactor   
     return Zx
 
-import matplotlib.pyplot as plt
 
 def weighting_function(d: float,
                        dx: float,
@@ -72,13 +71,11 @@ def weighting_function(d: float,
     """
     
     # C: matriz espacial (p.ej. covarianza) tamaño N0xN0
-    N0 = 2 * nsubx - 1
     Nfft = max(256, samp) 
-
 
     # 1. spatio-frequency domain (fx, fy)
     freq = np.fft.fftfreq(Nfft, d=dx)   #<-- spatio-frequency vector based on sub-aperture grid size [ cycles / (m)]
-    # df = 1/(dx * Nfft)
+
     fx, fy = np.meshgrid(freq, freq) 
 
 
@@ -91,7 +88,7 @@ def weighting_function(d: float,
     
     # 3. Shack-Hartmann aperture filter (Ec. 3.8)
     A_fx = calculate_Zx_spectral_filter(fx, fy, wavelength, d)
-    A_fy = calculate_Zx_spectral_filter(fy ,fy ,wavelength, d)
+    A_fy = calculate_Zx_spectral_filter(fy ,fx ,wavelength, d)
     
 
     # 4. propagation ( sinusoidal term in Ec. 3.9) fresnel phase param
@@ -115,9 +112,12 @@ def weighting_function(d: float,
     covariance_mapY = np.fft.fftshift(covariance_mapY) 
     
 
-    mid = int(Nfft/2) - int(N0/2)
-    W_zX = np.real(covariance_mapX[mid:mid+N0,mid:mid+N0]) * scalingFactor  # X slope on [Rad^2] -> [arcsec^2]
-    W_zY = np.real(covariance_mapY[mid:mid+N0,mid:mid+N0]) * scalingFactor  # Y slope on [Rad^2] -> [arcsec^2]
-    # W_zX = np.real(covariance_mapX) * scalingFactor  # X slope on [Rad^2] -> [arcsec^2]
-    # W_zY = np.real(covariance_mapY) * scalingFactor  # Y slope on [Rad^2] -> [arcsec^2]
+    mid = int(Nfft/2)
+    stride = int(round(d / dx))   # si dx=d/2 -> stride=2
+    k = np.arange(-(nsubx-1), nsubx)  # [-5..+5] para nsubx=6
+    idx = mid + stride * k
+
+    W_zX = np.real(covariance_mapX[np.ix_(idx,idx)]) * scalingFactor  # X slope on [Rad^2] -> [arcsec^2]
+    W_zY = np.real(covariance_mapY[np.ix_(idx,idx)]) * scalingFactor  # Y slope on [Rad^2] -> [arcsec^2]
+
     return np.array([W_zX,W_zY])

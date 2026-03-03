@@ -20,11 +20,11 @@ def slopecov_kol(nsubx: int,  #<-- sub-aperture number
     scaling = scalingFactor * (206265.0)**2 * 3.0 * (lam / (np.pi * d)) ** 2
 
     nn = 2 * nsubx - 1
-    cov = np.zeros((2, nn, nn), dtype=np.float64)
+    cov = np.zeros((2,nn,nn),dtype=np.float64)
 
-    # from C: sub-aperture coords in [-0.5,0.5)  offset of 0.5/nsamp
-    rxy = (np.arange(nsamp) - (nsamp / 2) + 0.5) / nsamp
-    tilt = 2.0 * np.sqrt(3.0) * rxy  # tilt[i] = 2*sqrt(3)*rxy[i]
+    rxy = (np.arange(nsamp) - (nsamp / 2) + 0.5) / nsamp 
+    tilt = 2.0 * np.sqrt(3.0) * rxy # tilt[i] = 2*sqrt(3)*rxy[i] 
+
 
     # from C (hard-wired lam=500nm and r0=d) now on radians
     n2 = nsamp * nsamp
@@ -46,9 +46,11 @@ def slopecov_kol(nsubx: int,  #<-- sub-aperture number
                 for ja in range(nsamp):
                     for ib in range(nsamp):
                         for jb in range(nsamp):
-                            x = (i - nsubx + 1) - rxy[ia] + rxy[ib]
-                            y = (j - nsubx + 1) - rxy[ja] + rxy[jb]
+                            x = (i - nsubx + 1) - rxy[ia] + rxy[ib]  
+                            y = (j - nsubx + 1) - rxy[ja] + rxy[jb]  
                             r = np.sqrt(x * x + y * y)
+
+
                             val = kol_strucfunc(r,lam, r0)
                             D_phi[ia, ja, ib, jb] = val
 

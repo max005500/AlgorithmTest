@@ -1,5 +1,5 @@
 import numpy as np
-import common as cm
+import KolmogorovPSD as cm
 
 def slope_weighting_function(d: float,
                              dx: float,
@@ -35,7 +35,6 @@ def slope_weighting_function(d: float,
 
     """
     # C: matriz espacial (p.ej. covarianza) tamaño N0xN0
-    N0 = 2 * nsubx - 1
     Nfft = max(256, samp) 
 
     # 1. spatio-frequency domain (fx, fy)
@@ -59,8 +58,6 @@ def slope_weighting_function(d: float,
     Phi_K = cm.Kolmogorov_PSD(f,wavelength,glob,cn2r0)
     scaling = wavelength**2
 
-    # scaling = (wavelength/(np.pi*2))**2
-
     spectral_densityX = fx * fx * Phi_K * Fresnel_term * A_f * scaling 
     spectral_densityY = fy * fy * Phi_K * Fresnel_term * A_f * scaling
 
@@ -74,58 +71,57 @@ def slope_weighting_function(d: float,
     # fftshift centra la frecuencia cero en el medio de la imagen para visualización
     covariance_mapX = np.fft.fftshift(covariance_mapX) 
     covariance_mapY = np.fft.fftshift(covariance_mapY) 
-    
 
-    mid = int(Nfft/2) - int(N0/2)
-    # @Dev_Note: actualy, I am not sure if it is necesary to implement this scaling-factor
-    W_zX = np.real(covariance_mapX[mid:mid+N0,mid:mid+N0]) * scalingFactor  # X slope on [Rad^2] -> [arcsec^2]
-    W_zY = np.real(covariance_mapY[mid:mid+N0,mid:mid+N0]) * scalingFactor  # Y slope on [Rad^2] -> [arcsec^2]
+    mid = int(Nfft/2)
+    stride = int(round(d / dx))   # if dx=d/2 -> stride=2
+    k = np.arange(-(nsubx-1), nsubx)  # [-5..+5] for nsubx=6
+    idx = mid + stride * k
 
-    # W_zX = np.real(covariance_mapX) * scalingFactor  # X slope on [Rad^2] -> [arcsec^2]
-    # W_zY = np.real(covariance_mapY) * scalingFactor  # Y slope on [Rad^2] -> [arcsec^2]
+    W_zX = np.real(covariance_mapX[np.ix_(idx,idx)]) * scalingFactor  # X slope on [Rad^2] -> [arcsec^2]
+    W_zY = np.real(covariance_mapY[np.ix_(idx,idx)]) * scalingFactor  # Y slope on [Rad^2] -> [arcsec^2]
+
     return np.array([W_zX,W_zY])
 
 
 
 def scintillation_weighting_function(d: float,
-                                    samp: int,
-                                    nsubx: int,
-                                    r0 = 1,
-                                    wavelength=500e-9,
-                                    h=0,
-                                    glob=False):
+                             dx: float,
+                             nsubx: int,
+                             samp: int,
+                             cn2r0: float = 1.,
+                             wavelength: float =500e-9,
+                             h:float =0.,
+                             scalingFactor: float = 1.,
+                             glob: bool = False):
 
     """
-    Calcula la función de peso espacial (covarianza) para SCO-SLIDAR.
+    calculate weighting function (cov) for SHIMM.
     
     Args:
-        h (float)  : layer altitude    [m].
-        d (float)  : sub-aperture size [m].
-        glob (Bool): if you want to use a Phi_K with a global r0 or not
-        nsubx (int): grid size.
+
+        dx(float)           : steps in phychic aperture [m]
+        h (float)           : layer altitude    [m].
+        d (float)           : sub-aperture size [m].
+        samp(int)           : frequency oversampling
+        glob (Bool)         : if you want to use a Phi_K with a global r0 or not
+        nsubx (int)         : grid size.
+        cn2r0(float)        : value of r0 or cn2 in K_PSD depends on glob
+        sclaingFactor(float): if you want to get the result in rad2 or arcsec2
 
     Returns:
-    return  W_z (ndarray): [2,N,N]. where N = 2*nsubx-1 
+    return  W_z (ndarray): [N,N]. where N = 2*nsubx-1 
 
-    cov matrix for x-slope and y-slope .
+    cov matrix for Scintillation index .
 
-    cov[0, di, dj] -> cov_xx  
+    cov[di, dj] -> cov_I 
 
-        
     """
     
     # 1. spatio-frequency domain (fx, fy)
-
-    N0 = 2 * nsubx - 1
     Nfft = max(256, samp) 
-    print(Nfft)
 
     # 1. spatio-frequency domain (fx, fy)
-    dx =  2/d                          #<-- steps for all sub-aperture grid [m]
-
-    freq = np.fft.fftfreq(Nfft, d=dx)   #<-- spatio-frequency vector based on sub-aperture grid size [1 / (m * cycles)]
-    
-
+    freq = np.fft.fftfreq(Nfft, d=dx)   #<-- spatio-frequency vector based on sub-aperture grid size [cycles/m]
     fx, fy = np.meshgrid(freq, freq) 
 
     # spatio-frequency magnitude 
@@ -141,20 +137,26 @@ def scintillation_weighting_function(d: float,
     Fresnel_term = np.sin(np.pi * wavelength * h * f2)**2
 
     #5. Kolmogorov PSD obtain
-    Phi_K = cm.Kolmogorov_PSD(f,wavelength,glob,r0)
+    Phi_K = cm.Kolmogorov_PSD(f,wavelength,glob,cn2r0)
 
     spectral_density = Phi_K * Fresnel_term * A_f * 4
 
     # 6. Numerical solution using IFFT 
-    covariance_map = np.fft.ifft2(spectral_density)
-    
-    # fftshift centra la frecuencia cero en el medio de la imagen para visualización
+    df = freq[1] - freq[0]
+    fft_integral_scale = (Nfft**2) * (df**2)
+
+    covariance_map = np.fft.ifft2(spectral_density) * fft_integral_scale
     covariance_map = np.fft.fftshift(covariance_map) 
     
-    # @Dev_Note: actualy, I am not sure if it is necesary to implement this scaling-factor
+    # fftshift centra la frecuencia cero en el medio de la imagen para visualización
 
-    mid = int(Nfft/2) - int(N0/2)
-    W_z = np.real(covariance_map[mid:mid+N0,mid:mid+N0])     
+    mid = int(Nfft/2) 
+    stride = int(round(d / dx))   # si dx=d/2 -> stride=2
+    k = np.arange(-(nsubx-1), nsubx)  # [-5..+5] para nsubx=6
+    idx = mid + stride * k
+
+    # W_z = np.real(covariance_map[mid:mid+N0,mid:mid+N0]) * scalingFactor  # Y slope on [Rad^2] -> [arcsec^2]
+    W_z = np.real(covariance_map[np.ix_(idx,idx)]) * scalingFactor  
 
     return W_z
 
